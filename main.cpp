@@ -5,10 +5,11 @@
 int main() {
     auto start = std::chrono::high_resolution_clock::now();
 
-    Solver solver{};
+    Solver solver{0.0, 10.0, 0.0, 0.0, 0.0};
     // solver.JacobiSolver();
     // solver.GaussSeidelSolver();
     // solver.writeVTK("temp.vtk");
+    solver.solve();
 
     auto end = std::chrono::high_resolution_clock::now();
 

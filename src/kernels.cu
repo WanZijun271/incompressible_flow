@@ -9,56 +9,46 @@ using namespace std;
 __global__ void initUfKernel(scalar *u, scalar *uf) {
 
     int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
-    int j = blockIdx.y * blockDim.y + threadIdx.y + 1;
-    int k = blockIdx.z * blockDim.z + threadIdx.z + 1;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    int k = blockIdx.z * blockDim.z + threadIdx.z;
 
-    if (dim == 2 && i < nx && j < ny-1) {
-        int id_c = i + j * (nx + 1);
-        int id_W = i - 1 + j * nx;
-        int id_E = i + j * nx;
-        uf[id_c] = (u[id_W] + u[id_E]) / scalar(2.0);
-    } else if (dim == 3 && i < nx && j < ny-1 && k < nz-1) {
+    if (i < nx && j < ny && k < nz) {
         int id_c = i + j * (nx + 1) + k * (nx + 1) * ny;
         int id_W = i - 1 + j * nx + k * nx * ny;
         int id_E = i + j * nx + k * nx * ny;
-        uf[id_c] = (u[id_W] + u[id_E]) / scalar(2.0);
+        uf[id_c] = (u[id_W] + u[id_E]) / 2.0;
     }
 }
 
 __global__ void initVfKernel(scalar *v, scalar *vf) {
 
-    int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y + 1;
-    int k = blockIdx.z * blockDim.z + threadIdx.z + 1;
+    int k = blockIdx.z * blockDim.z + threadIdx.z;
 
-    if (dim == 2 && i < nx-1 && j < ny) {
-        int id_c = j + i * (ny + 1);
-        int id_S = j - 1 + i * ny;
-        int id_N = j + i * ny;
-        vf[id_c] = (v[id_S] + v[id_N]) / scalar(2.0);
-    } else if (dim == 3 && i < nx-1 && j < ny && k < nz-1) {
+    if (i < nx && j < ny && k < nz) {
         int id_c = j + k * (ny + 1) + i * (ny + 1) * nz;
         int id_S = j - 1 + k * ny + i * ny * nz;
         int id_N = j + k * ny + i * ny * nz;
-        vf[id_c] = (v[id_S] + v[id_N]) / scalar(2.0);
+        vf[id_c] = (v[id_S] + v[id_N]) / 2.0;
     }
 }
 
 __global__ void initWfKernel(scalar *w, scalar *wf) {
 
-    int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
-    int j = blockIdx.y * blockDim.y + threadIdx.y + 1;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
     int k = blockIdx.z * blockDim.z + threadIdx.z + 1;
 
-    if (dim == 3 && i < nx-1 && j < ny-1 && k < nz) {
+    if (i < nx && j < ny && k < nz) {
         int id_c = k + i * (nz + 1) + j * (nz + 1) * nx;
         int id_B = k - 1 + i * nz + j * nz * nx;
         int id_T = k + i * nz + j * nz * nx;
-        wf[id_c] = (w[id_B] + w[id_T]) / scalar(2.0);
+        wf[id_c] = (w[id_B] + w[id_T]) / 2.0;
     }
 }
 
-void initVelOnFace(scalar *u_dev, scalar *v_dev, scalar *w_dev, scalar *uf_dev, scalar *vf_dev, scalar *wf_dev) {
+void initFaceVel(scalar *u_dev, scalar *v_dev, scalar *w_dev, scalar *uf_dev, scalar *vf_dev, scalar *wf_dev) {
 
     cudaStream_t stream1, stream2, stream3;
     cudaStreamCreate(&stream1);
@@ -70,32 +60,145 @@ void initVelOnFace(scalar *u_dev, scalar *v_dev, scalar *w_dev, scalar *uf_dev, 
     dim3 threadsPerBlock;
     dim3 numBlocks;
     if (dim == 2) {
-        threadsPerBlock.x = 32;
-        threadsPerBlock.y = 32;
-        threadsPerBlock.z = 1;
+        threadsPerBlock = dim3(32, 32, 1);
     } else if (dim == 3) {
-        threadsPerBlock.x = 16;
-        threadsPerBlock.y = 8;
-        threadsPerBlock.z = 8;
+        threadsPerBlock = dim3(16, 16, 8);
     }
 
     numBlocks.x = (nx - 1 + threadsPerBlock.x - 1) / threadsPerBlock.x;
-    numBlocks.y = (ny - 2 + threadsPerBlock.y - 1) / threadsPerBlock.y;
-    numBlocks.z = (nz - 2 + threadsPerBlock.z - 1) / threadsPerBlock.z;
-    numBlocks.z = max(1, numBlocks.z);
+    numBlocks.y = (ny + threadsPerBlock.y - 1) / threadsPerBlock.y;
+    numBlocks.z = (nz + threadsPerBlock.z - 1) / threadsPerBlock.z;
     initUfKernel<<<numBlocks, threadsPerBlock, 0, stream1>>>(u_dev, uf_dev);
 
-    numBlocks.x = (nx - 2 + threadsPerBlock.x - 1) / threadsPerBlock.x;
+    numBlocks.x = (nx + threadsPerBlock.x - 1) / threadsPerBlock.x;
     numBlocks.y = (ny - 1 + threadsPerBlock.y - 1) / threadsPerBlock.y;
-    numBlocks.z = (nz - 2 + threadsPerBlock.z - 1) / threadsPerBlock.z;
-    numBlocks.z = max(1, numBlocks.z);
+    numBlocks.z = (nz + threadsPerBlock.z - 1) / threadsPerBlock.z;
     initVfKernel<<<numBlocks, threadsPerBlock, 0, stream2>>>(v_dev, vf_dev);
 
     if (dim == 3) {
-        numBlocks.x = (nx - 2 + threadsPerBlock.x - 1) / threadsPerBlock.x;
-        numBlocks.y = (ny - 2 + threadsPerBlock.y - 1) / threadsPerBlock.y;
+        numBlocks.x = (nx + threadsPerBlock.x - 1) / threadsPerBlock.x;
+        numBlocks.y = (ny + threadsPerBlock.y - 1) / threadsPerBlock.y;
         numBlocks.z = (nz - 1 + threadsPerBlock.z - 1) / threadsPerBlock.z;
         initWfKernel<<<numBlocks, threadsPerBlock, 0, stream3>>>(w_dev, wf_dev);
+    }
+
+    cudaStreamSynchronize(stream1);
+    cudaStreamSynchronize(stream2);
+    if (dim == 3) {
+        cudaStreamSynchronize(stream3);
+    }
+
+    cudaStreamDestroy(stream1);
+    cudaStreamDestroy(stream2);
+    if (dim == 3) {
+        cudaStreamDestroy(stream3);
+    }
+}
+
+__global__ void applyUfBCsKernel(scalar *uf, scalar *u, int i, int type, scalar val) {
+
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    int k = blockIdx.z * blockDim.z + threadIdx.z;
+
+    if (j < ny && k < nz) {
+        int id = i + j * (nx+1) + k * (nx+1) * ny;
+        if (type == 0) { // "wall"
+            uf[id] = 0;
+        } else if (type == 1) { // "inlet"
+            uf[id] = val;
+        } else if (type == 2) { // "outlet"
+            if (i == 0) {
+                uf[id] = u[0 + j * nx + k * nx * ny];
+            } else if (i == nx) {
+                uf[id] = u[nx - 1 + j * nx + k * nx * ny];
+            }
+        }
+    }
+}
+
+__global__ void applyVfBCsKernel(scalar *vf, scalar *v, int j, int type, scalar val) {
+
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int k = blockIdx.z * blockDim.z + threadIdx.z;
+
+    if (i < nx && k < nz) {
+        int id = j + k * (ny+1) + i * (ny+1) * nz;
+        if (type == 0) { // "wall"
+            vf[id] = 0;
+        } else if (type == 1) { // "inlet"
+            vf[id] = val;
+        } else if (type == 2) { // "outlet"
+            if (j == 0) {
+                vf[id] = v[0 + k * ny + i * ny * nz];
+            } else if (j == ny) {
+                vf[id] = v[ny - 1 + k * ny + i * ny * nz];
+            }
+        }
+    }
+}
+
+__global__ void applyWfBCsKernel(scalar *wf, scalar *w, int k, int type, scalar val) {
+
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (i < nx && j < ny) {
+        int id = k + i * (nz+1) + j * (nz+1) * nx;
+        if (type == 0) { // "wall"
+            wf[id] = 0;
+        } else if (type == 1) { // "inlet"
+            wf[id] = val;
+        } else if (type == 2) { // "outlet"
+            if (k == 0) {
+                wf[id] = w[0 + i * nz + j * nz * nx];
+            } else if (k == nz) {
+                wf[id] = w[nz - 1 + i * nz + j * nz * nx];
+            }
+        }
+    }
+}
+
+void applyFaceVelBCs(scalar *uf_dev, scalar *vf_dev, scalar *wf_dev, scalar *u_dev, scalar *v_dev, scalar *w_dev) {
+
+    cudaStream_t stream1, stream2, stream3;
+    cudaStreamCreate(&stream1);
+    cudaStreamCreate(&stream2);
+    if (dim == 3) {
+        cudaStreamCreate(&stream3);
+    }
+
+    dim3 threadsPerBlock;
+    dim3 numBlocks;
+
+    if (dim == 2) {
+        threadsPerBlock = dim3(1, 1024, 1);
+    } else if (dim == 3) {
+        threadsPerBlock = dim3(1, 32, 32);
+    }
+    numBlocks.x = 1;
+    numBlocks.y = (ny + threadsPerBlock.y - 1) / threadsPerBlock.y;
+    numBlocks.z = (nz + threadsPerBlock.z - 1) / threadsPerBlock.z;
+    applyUfBCsKernel<<<numBlocks, threadsPerBlock, 0, stream1>>>(uf_dev, u_dev, 0, velBCs::type[west], velBCs::val[west][0]);
+    applyUfBCsKernel<<<numBlocks, threadsPerBlock, 0, stream1>>>(uf_dev, u_dev, nx, velBCs::type[east], velBCs::val[east][0]);
+
+    if (dim == 2) {
+        threadsPerBlock = dim3(1024, 1, 1);
+    } else if (dim == 3) {
+        threadsPerBlock = dim3(32, 1, 32);
+    }
+    numBlocks.x = (nx + threadsPerBlock.x - 1) / threadsPerBlock.x;
+    numBlocks.y = 1;
+    numBlocks.z = (nz + threadsPerBlock.z - 1) / threadsPerBlock.z;
+    applyVfBCsKernel<<<numBlocks, threadsPerBlock, 0, stream2>>>(vf_dev, v_dev, 0, velBCs::type[south], velBCs::val[south][1]);
+    applyVfBCsKernel<<<numBlocks, threadsPerBlock, 0, stream2>>>(vf_dev, v_dev, ny, velBCs::type[north], velBCs::val[north][1]);
+
+    if (dim == 3) {
+        threadsPerBlock = dim3(32, 32, 1);
+        numBlocks.x = (nx + threadsPerBlock.x - 1) / threadsPerBlock.x;
+        numBlocks.y = (ny + threadsPerBlock.y - 1) / threadsPerBlock.y;
+        numBlocks.z = 1;
+        applyWfBCsKernel<<<numBlocks, threadsPerBlock, 0, stream3>>>(wf_dev, w_dev, 0, velBCs::type[bottom], velBCs::val[bottom][2]);
+        applyWfBCsKernel<<<numBlocks, threadsPerBlock, 0, stream3>>>(wf_dev, w_dev, nz, velBCs::type[top], velBCs::val[top][2]);
     }
 
     cudaStreamSynchronize(stream1);
@@ -220,17 +323,13 @@ void pointJacobiIterate(vector<scalar> &tempField, const vector<scalar> &coef) {
     dim3 threadsPerBlock;
     dim3 numBlocks;
     if (dim == 2) {
-        threadsPerBlock.x = 32;
-        threadsPerBlock.y = 32;
-        threadsPerBlock.z = 1;
+        threadsPerBlock = dim3(32, 32, 1);
 
         numBlocks.x = (nx + 31) / 32;
         numBlocks.y = (ny + 31) / 32;
         numBlocks.z = 1;
     } else if (dim == 3) {
-        threadsPerBlock.x = 16;
-        threadsPerBlock.y = 8;
-        threadsPerBlock.z = 8;
+        threadsPerBlock = dim3(16, 16, 8);
 
         numBlocks.x = (nx + 15) / 16;
         numBlocks.y = (ny + 7) / 8;
@@ -379,17 +478,13 @@ void GaussSeidelIterate(vector<scalar> &tempField, const vector<scalar> &coef) {
     dim3 threadsPerBlock;
     dim3 numBlocks;
     if (dim == 2) {
-        threadsPerBlock.x = 32;
-        threadsPerBlock.y = 32;
-        threadsPerBlock.z = 1;
+        threadsPerBlock = dim3(32, 32, 1);
 
         numBlocks.x = (nx + 31) / 32;
         numBlocks.y = (ny + 31) / 32;
         numBlocks.z = 1;
     } else if (dim == 3) {
-        threadsPerBlock.x = 16;
-        threadsPerBlock.y = 8;
-        threadsPerBlock.z = 8;
+        threadsPerBlock = dim3(16, 16, 8);
 
         numBlocks.x = (nx + 15) / 16;
         numBlocks.y = (ny + 7) / 8;

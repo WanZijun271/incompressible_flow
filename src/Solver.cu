@@ -27,7 +27,6 @@ Solver::Solver(scalar u, scalar v, scalar w, scalar p, scalar temp) {
 void Solver::solve() {
 
     size_t fieldSize = nx * ny * nz * sizeof(scalar);
-    size_t coefSize = nx * ny * nz * (2+2*dim) * sizeof(scalar);
 
     scalar *u_dev, *v_dev, *w_dev, *p_dev, *temp_dev;
     cudaMalloc(&u_dev, fieldSize);
@@ -55,11 +54,17 @@ void Solver::solve() {
     cudaMemset(vf_dev, 0.0, vfSize);
     cudaMemset(wf_dev, 0.0, wfSize);
 
+    size_t coefSize = nx * ny * nz * (2+2*dim) * sizeof(scalar);
+    scalar *coef_dev;
+    cudaMalloc(&coef_dev, coefSize);
+    cudaMemset(coef_dev, 0.0, coefSize);
+
     for (int it = 0; it < niter; ++it) {
 
         if (it == 0) {
-            initVelOnFace(u_dev, v_dev, w_dev, uf_dev, vf_dev, wf_dev);
+            initFaceVel(u_dev, v_dev, w_dev, uf_dev, vf_dev, wf_dev); // initalize the velocity on the faces
         }
+        applyFaceVelBCs(uf_dev, vf_dev, wf_dev, u_dev, v_dev, w_dev);
 
     }
 
@@ -72,6 +77,8 @@ void Solver::solve() {
     cudaFree(uf_dev);
     cudaFree(vf_dev);
     cudaFree(wf_dev);
+
+    cudaFree(coef_dev);
 }
 
 /* void Solver::pointJacobiSolver() {
