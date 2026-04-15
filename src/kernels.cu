@@ -13,10 +13,10 @@ __global__ void initUfKernel(scalar *u, scalar *uf) {
     int k = blockIdx.z * blockDim.z + threadIdx.z;
 
     if (i < nx && j < ny && k < nz) {
-        int id_c = i + j * (nx + 1) + k * (nx + 1) * ny;
-        int id_W = i - 1 + j * nx + k * nx * ny;
-        int id_E = i + j * nx + k * nx * ny;
-        uf[id_c] = (u[id_W] + u[id_E]) / 2.0;
+        int id_c = i + (nx+1) * (j + ny * k);
+        int id_W = i-1 + nx * (j + ny * k);
+        int id_E = i + nx * (j + ny * k);
+        uf[id_c] = (u[id_W] + u[id_E]) / 2;
     }
 }
 
@@ -27,10 +27,10 @@ __global__ void initVfKernel(scalar *v, scalar *vf) {
     int k = blockIdx.z * blockDim.z + threadIdx.z;
 
     if (i < nx && j < ny && k < nz) {
-        int id_c = j + k * (ny + 1) + i * (ny + 1) * nz;
-        int id_S = j - 1 + k * ny + i * ny * nz;
-        int id_N = j + k * ny + i * ny * nz;
-        vf[id_c] = (v[id_S] + v[id_N]) / 2.0;
+        int id_c = j + (ny+1) * (k + nz * i);
+        int id_S = j-1 + ny * (k + nz * i);
+        int id_N = j + ny * (k + nz * i);
+        vf[id_c] = (v[id_S] + v[id_N]) / 2;
     }
 }
 
@@ -41,20 +41,18 @@ __global__ void initWfKernel(scalar *w, scalar *wf) {
     int k = blockIdx.z * blockDim.z + threadIdx.z + 1;
 
     if (i < nx && j < ny && k < nz) {
-        int id_c = k + i * (nz + 1) + j * (nz + 1) * nx;
-        int id_B = k - 1 + i * nz + j * nz * nx;
-        int id_T = k + i * nz + j * nz * nx;
-        wf[id_c] = (w[id_B] + w[id_T]) / 2.0;
+        int id_c = k + (nz+1) * (i + nx * j);
+        int id_B = k-1 + nz * (i + nx * j);
+        int id_T = k + nz * (i + nx * j);
+        wf[id_c] = (w[id_B] + w[id_T]) / 2;
     }
 }
 
 void initFaceVel(scalar *u_dev, scalar *v_dev, scalar *w_dev, scalar *uf_dev, scalar *vf_dev, scalar *wf_dev) {
 
-    cudaStream_t stream1, stream2, stream3;
-    cudaStreamCreate(&stream1);
-    cudaStreamCreate(&stream2);
-    if (dim == 3) {
-        cudaStreamCreate(&stream3);
+    cudaStream_t stream[dim];
+    for (int i = 0; i < dim; ++i) {
+        cudaStreamCreate(&stream[i]);
     }
 
     dim3 threadsPerBlock;
@@ -68,30 +66,26 @@ void initFaceVel(scalar *u_dev, scalar *v_dev, scalar *w_dev, scalar *uf_dev, sc
     numBlocks.x = (nx - 1 + threadsPerBlock.x - 1) / threadsPerBlock.x;
     numBlocks.y = (ny + threadsPerBlock.y - 1) / threadsPerBlock.y;
     numBlocks.z = (nz + threadsPerBlock.z - 1) / threadsPerBlock.z;
-    initUfKernel<<<numBlocks, threadsPerBlock, 0, stream1>>>(u_dev, uf_dev);
+    initUfKernel<<<numBlocks, threadsPerBlock, 0, stream[0]>>>(u_dev, uf_dev);
 
     numBlocks.x = (nx + threadsPerBlock.x - 1) / threadsPerBlock.x;
     numBlocks.y = (ny - 1 + threadsPerBlock.y - 1) / threadsPerBlock.y;
     numBlocks.z = (nz + threadsPerBlock.z - 1) / threadsPerBlock.z;
-    initVfKernel<<<numBlocks, threadsPerBlock, 0, stream2>>>(v_dev, vf_dev);
+    initVfKernel<<<numBlocks, threadsPerBlock, 0, stream[1]>>>(v_dev, vf_dev);
 
     if (dim == 3) {
         numBlocks.x = (nx + threadsPerBlock.x - 1) / threadsPerBlock.x;
         numBlocks.y = (ny + threadsPerBlock.y - 1) / threadsPerBlock.y;
         numBlocks.z = (nz - 1 + threadsPerBlock.z - 1) / threadsPerBlock.z;
-        initWfKernel<<<numBlocks, threadsPerBlock, 0, stream3>>>(w_dev, wf_dev);
+        initWfKernel<<<numBlocks, threadsPerBlock, 0, stream[2]>>>(w_dev, wf_dev);
     }
 
-    cudaStreamSynchronize(stream1);
-    cudaStreamSynchronize(stream2);
-    if (dim == 3) {
-        cudaStreamSynchronize(stream3);
+    for (int i = 0; i < dim; ++i) {
+        cudaStreamSynchronize(stream[i]);
     }
 
-    cudaStreamDestroy(stream1);
-    cudaStreamDestroy(stream2);
-    if (dim == 3) {
-        cudaStreamDestroy(stream3);
+    for (int i = 0; i < dim; ++i) {
+        cudaStreamDestroy(stream[i]);
     }
 }
 
@@ -101,16 +95,16 @@ __global__ void applyUfBCsKernel(scalar *uf, scalar *u, int i, int type, scalar 
     int k = blockIdx.z * blockDim.z + threadIdx.z;
 
     if (j < ny && k < nz) {
-        int id = i + j * (nx+1) + k * (nx+1) * ny;
+        int id = i + (nx+1) * (j + ny * k);
         if (type == 0) { // "wall"
             uf[id] = 0;
         } else if (type == 1) { // "inlet"
             uf[id] = val;
         } else if (type == 2) { // "outlet"
             if (i == 0) {
-                uf[id] = u[0 + j * nx + k * nx * ny];
+                uf[id] = u[0 + nx * (j + ny * k)];
             } else if (i == nx) {
-                uf[id] = u[nx - 1 + j * nx + k * nx * ny];
+                uf[id] = u[nx-1 + nx * (j + ny * k)];
             }
         }
     }
@@ -122,16 +116,16 @@ __global__ void applyVfBCsKernel(scalar *vf, scalar *v, int j, int type, scalar 
     int k = blockIdx.z * blockDim.z + threadIdx.z;
 
     if (i < nx && k < nz) {
-        int id = j + k * (ny+1) + i * (ny+1) * nz;
+        int id = j + (ny+1) * (k + nz * i);
         if (type == 0) { // "wall"
             vf[id] = 0;
         } else if (type == 1) { // "inlet"
             vf[id] = val;
         } else if (type == 2) { // "outlet"
             if (j == 0) {
-                vf[id] = v[0 + k * ny + i * ny * nz];
+                vf[id] = v[0 + ny * (k + nz * i)];
             } else if (j == ny) {
-                vf[id] = v[ny - 1 + k * ny + i * ny * nz];
+                vf[id] = v[ny-1 + ny * (k + nz * i)];
             }
         }
     }
@@ -143,16 +137,16 @@ __global__ void applyWfBCsKernel(scalar *wf, scalar *w, int k, int type, scalar 
     int j = blockIdx.y * blockDim.y + threadIdx.y;
 
     if (i < nx && j < ny) {
-        int id = k + i * (nz+1) + j * (nz+1) * nx;
+        int id = k + (nz+1) * (i + nx * j);
         if (type == 0) { // "wall"
             wf[id] = 0;
         } else if (type == 1) { // "inlet"
             wf[id] = val;
         } else if (type == 2) { // "outlet"
             if (k == 0) {
-                wf[id] = w[0 + i * nz + j * nz * nx];
+                wf[id] = w[0 + nz * (i + nx * j)];
             } else if (k == nz) {
-                wf[id] = w[nz - 1 + i * nz + j * nz * nx];
+                wf[id] = w[nz-1 + nz * (i + nx * j)];
             }
         }
     }
@@ -160,11 +154,9 @@ __global__ void applyWfBCsKernel(scalar *wf, scalar *w, int k, int type, scalar 
 
 void applyFaceVelBCs(scalar *uf_dev, scalar *vf_dev, scalar *wf_dev, scalar *u_dev, scalar *v_dev, scalar *w_dev) {
 
-    cudaStream_t stream1, stream2, stream3;
-    cudaStreamCreate(&stream1);
-    cudaStreamCreate(&stream2);
-    if (dim == 3) {
-        cudaStreamCreate(&stream3);
+    cudaStream_t stream[2*dim];
+    for (int i = 0; i < 2*dim; ++i) {
+        cudaStreamCreate(&stream[i]);
     }
 
     dim3 threadsPerBlock;
@@ -178,8 +170,8 @@ void applyFaceVelBCs(scalar *uf_dev, scalar *vf_dev, scalar *wf_dev, scalar *u_d
     numBlocks.x = 1;
     numBlocks.y = (ny + threadsPerBlock.y - 1) / threadsPerBlock.y;
     numBlocks.z = (nz + threadsPerBlock.z - 1) / threadsPerBlock.z;
-    applyUfBCsKernel<<<numBlocks, threadsPerBlock, 0, stream1>>>(uf_dev, u_dev, 0, velBCs::type[west], velBCs::val[west][0]);
-    applyUfBCsKernel<<<numBlocks, threadsPerBlock, 0, stream1>>>(uf_dev, u_dev, nx, velBCs::type[east], velBCs::val[east][0]);
+    applyUfBCsKernel<<<numBlocks, threadsPerBlock, 0, stream[0]>>>(uf_dev, u_dev, 0, velBCs::type[west], velBCs::val[west][0]);
+    applyUfBCsKernel<<<numBlocks, threadsPerBlock, 0, stream[1]>>>(uf_dev, u_dev, nx, velBCs::type[east], velBCs::val[east][0]);
 
     if (dim == 2) {
         threadsPerBlock = dim3(1024, 1, 1);
@@ -189,29 +181,76 @@ void applyFaceVelBCs(scalar *uf_dev, scalar *vf_dev, scalar *wf_dev, scalar *u_d
     numBlocks.x = (nx + threadsPerBlock.x - 1) / threadsPerBlock.x;
     numBlocks.y = 1;
     numBlocks.z = (nz + threadsPerBlock.z - 1) / threadsPerBlock.z;
-    applyVfBCsKernel<<<numBlocks, threadsPerBlock, 0, stream2>>>(vf_dev, v_dev, 0, velBCs::type[south], velBCs::val[south][1]);
-    applyVfBCsKernel<<<numBlocks, threadsPerBlock, 0, stream2>>>(vf_dev, v_dev, ny, velBCs::type[north], velBCs::val[north][1]);
+    applyVfBCsKernel<<<numBlocks, threadsPerBlock, 0, stream[2]>>>(vf_dev, v_dev, 0, velBCs::type[south], velBCs::val[south][1]);
+    applyVfBCsKernel<<<numBlocks, threadsPerBlock, 0, stream[3]>>>(vf_dev, v_dev, ny, velBCs::type[north], velBCs::val[north][1]);
 
     if (dim == 3) {
         threadsPerBlock = dim3(32, 32, 1);
         numBlocks.x = (nx + threadsPerBlock.x - 1) / threadsPerBlock.x;
         numBlocks.y = (ny + threadsPerBlock.y - 1) / threadsPerBlock.y;
         numBlocks.z = 1;
-        applyWfBCsKernel<<<numBlocks, threadsPerBlock, 0, stream3>>>(wf_dev, w_dev, 0, velBCs::type[bottom], velBCs::val[bottom][2]);
-        applyWfBCsKernel<<<numBlocks, threadsPerBlock, 0, stream3>>>(wf_dev, w_dev, nz, velBCs::type[top], velBCs::val[top][2]);
+        applyWfBCsKernel<<<numBlocks, threadsPerBlock, 0, stream[4]>>>(wf_dev, w_dev, 0, velBCs::type[bottom], velBCs::val[bottom][2]);
+        applyWfBCsKernel<<<numBlocks, threadsPerBlock, 0, stream[5]>>>(wf_dev, w_dev, nz, velBCs::type[top], velBCs::val[top][2]);
     }
 
-    cudaStreamSynchronize(stream1);
-    cudaStreamSynchronize(stream2);
-    if (dim == 3) {
-        cudaStreamSynchronize(stream3);
+    for (int i = 0; i < 2*dim; ++i) {
+        cudaStreamSynchronize(stream[i]);
     }
 
-    cudaStreamDestroy(stream1);
-    cudaStreamDestroy(stream2);
-    if (dim == 3) {
-        cudaStreamDestroy(stream3);
+    for (int i = 0; i < 2*dim; ++i) {
+        cudaStreamDestroy(stream[i]);
     }
+}
+
+__global__ void calcMomentumLinkCoefKernel(scalar *coef, scalar *uf, scalar *vf, scalar *wf) {
+
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    int k = blockIdx.z * blockDim.z + threadIdx.z;
+
+    if (i < nx && j < ny && k < nz) {
+        int nTerms = 2 + 2 * dim;
+        int id = nTerms * (i + nx * (j + ny * k));
+
+        scalar ue = uf[i+1 + (nx+1) * (j + ny * k)];
+        scalar uw = uf[i + (nx+1) * (j + ny * k)];
+        scalar vn = vf[j+1 + (ny+1) * (k + nz * i)];
+        scalar vs = vf[j + (ny+1) * (k + nz * i)];
+
+        coef[id+id_aE] = (density * (ue - abs(ue)) * areaE) / 2 - dynamicViscosity * areaE / dx;
+        coef[id+id_aW] = (density * (-uw - abs(uw)) * areaW) / 2 - dynamicViscosity * areaW / dx;
+        coef[id+id_aN] = (density * (vn - abs(vn)) * areaN) / 2 - dynamicViscosity * areaN / dy;
+        coef[id+id_aS] = (density * (-vs - abs(vs)) * areaS) / 2 - dynamicViscosity * areaS / dy;
+        coef[id+id_aC] = -(coef[id+id_aE] + coef[id+id_aW] + coef[id+id_aN] + coef[id+id_aS]);
+
+        if (dim == 3) {
+            scalar wt = wf[k+1 + (nz+1) * (i + nx * j)];
+            scalar wb = wf[k + (nz+1) * (i + nx * j)];
+
+            coef[id+id_aT] = (density * (wt - abs(wt)) * areaT) / 2 - dynamicViscosity * areaT / dz;
+            coef[id+id_aB] = (density * (-wb - abs(wb)) * areaB) / 2 - dynamicViscosity * areaB / dz;
+            coef[id+id_aC] += -(coef[id+id_aT] + coef[id+id_aB]);
+        }
+    }
+}
+
+void calcMomentumLinkCoef(scalar *coef_dev, scalar *uf_dev, scalar *vf_dev, scalar *wf_dev) {
+
+    dim3 threadsPerBlock;
+    dim3 numBlocks; 
+
+    if (dim == 2) {
+        threadsPerBlock = dim3(32, 32, 1);
+    } else if (dim == 3) {
+        threadsPerBlock = dim3(16, 8, 8);
+    }
+    numBlocks.x = (nx + threadsPerBlock.x - 1) / threadsPerBlock.x;
+    numBlocks.y = (ny + threadsPerBlock.y - 1) / threadsPerBlock.y;
+    numBlocks.z = (nz + threadsPerBlock.z - 1) / threadsPerBlock.z;
+
+    calcMomentumLinkCoefKernel<<<numBlocks, threadsPerBlock>>>(coef_dev, uf_dev, vf_dev, wf_dev);
+
+    cudaDeviceSynchronize();
 }
 
 __global__ void pointJacobiIterateKernel(scalar *tempField, scalar* tempField0, scalar *coef, scalar *norm) {
@@ -271,7 +310,7 @@ __global__ void pointJacobiIterateKernel(scalar *tempField, scalar* tempField0, 
                 - coef[id+id_aW] * tempW
                 - coef[id+id_aN] * tempN
                 - coef[id+id_aS] * tempS;
-            newTemp /= coef[id+id_aP];
+            newTemp /= coef[id+id_aC];
         } else if (dim == 3) {
             int id = i * 8 + j * nx * 8 + k * nx * ny * 8;
             newTemp = coef[id+id_b]
@@ -281,7 +320,7 @@ __global__ void pointJacobiIterateKernel(scalar *tempField, scalar* tempField0, 
                 - coef[id+id_aS] * tempS
                 - coef[id+id_aT] * tempT
                 - coef[id+id_aB] * tempB;
-            newTemp /= coef[id+id_aP];
+            newTemp /= coef[id+id_aC];
         }
 
         scalar dT = relax * (newTemp - tempP);
@@ -428,7 +467,7 @@ __global__ void GaussSeidelIterateKernel(scalar *tempField, scalar *coef, scalar
                 - coef[id+id_aW] * tempW
                 - coef[id+id_aN] * tempN
                 - coef[id+id_aS] * tempS;
-            newTemp /= coef[id+id_aP];
+            newTemp /= coef[id+id_aC];
         } else if (dim == 3) {
             int id = i * 8 + j * nx * 8 + k * nx * ny * 8;
             newTemp = coef[id+id_b]
@@ -438,7 +477,7 @@ __global__ void GaussSeidelIterateKernel(scalar *tempField, scalar *coef, scalar
                 - coef[id+id_aS] * tempS
                 - coef[id+id_aT] * tempT
                 - coef[id+id_aB] * tempB;
-            newTemp /= coef[id+id_aP];
+            newTemp /= coef[id+id_aC];
         }
 
         scalar dT = relax * (newTemp - tempP);
