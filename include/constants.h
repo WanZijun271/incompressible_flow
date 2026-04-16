@@ -11,14 +11,13 @@ constexpr int south  = 3;
 constexpr int top    = 4;
 constexpr int bottom = 5;
 
-constexpr int id_b  = 0;
-constexpr int id_aC = 1;
-constexpr int id_aE = 2;
-constexpr int id_aW = 3;
-constexpr int id_aN = 4;
-constexpr int id_aS = 5;
-constexpr int id_aT = 6;
-constexpr int id_aB = 7;
+constexpr int aC = 0;
+constexpr int aE = 1;
+constexpr int aW = 2;
+constexpr int aN = 3;
+constexpr int aS = 4;
+constexpr int aT = 5;
+constexpr int aB = 6;
 
 constexpr scalar dx = (xmax - xmin) / (scalar)nx;
 constexpr scalar dy = (ymax - ymin) / (scalar)ny;

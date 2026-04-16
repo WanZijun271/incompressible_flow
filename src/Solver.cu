@@ -54,10 +54,31 @@ void Solver::solve() {
     cudaMemset(vf_dev, 0.0, vfSize);
     cudaMemset(wf_dev, 0.0, wfSize);
 
-    size_t coefSize = nx * ny * nz * (2+2*dim) * sizeof(scalar);
-    scalar *coef_dev;
-    cudaMalloc(&coef_dev, coefSize);
-    cudaMemset(coef_dev, 0.0, coefSize);
+    size_t coefSize = nx * ny * nz * (1+2*dim) * sizeof(scalar);
+
+    scalar *uCoef_dev, *vCoef_dev, *wCoef_dev, *pCoef_dev;
+    cudaMalloc(&uCoef_dev, coefSize);
+    cudaMalloc(&vCoef_dev, coefSize);
+    cudaMalloc(&wCoef_dev, coefSize);
+    cudaMalloc(&pCoef_dev, coefSize);
+
+    cudaMemset(uCoef_dev, 0.0, coefSize);
+    cudaMemset(vCoef_dev, 0.0, coefSize);
+    cudaMemset(wCoef_dev, 0.0, coefSize);
+    cudaMemset(pCoef_dev, 0.0, coefSize);
+
+    size_t srcTermSize = nx * ny * nz * sizeof(scalar);
+
+    scalar *uSrcTerm_dev, *vSrcTerm_dev, *wSrcTerm_dev, *pSrcTerm_dev;
+    cudaMalloc(&uSrcTerm_dev, srcTermSize);
+    cudaMalloc(&vSrcTerm_dev, srcTermSize);
+    cudaMalloc(&wSrcTerm_dev, srcTermSize);
+    cudaMalloc(&pSrcTerm_dev, srcTermSize);
+
+    cudaMemset(uSrcTerm_dev, 0.0, srcTermSize);
+    cudaMemset(vSrcTerm_dev, 0.0, srcTermSize);
+    cudaMemset(wSrcTerm_dev, 0.0, srcTermSize);
+    cudaMemset(pSrcTerm_dev, 0.0, srcTermSize);
 
     for (int it = 0; it < niter; ++it) {
 
@@ -66,7 +87,11 @@ void Solver::solve() {
         }
         applyFaceVelBCs(uf_dev, vf_dev, wf_dev, u_dev, v_dev, w_dev);
 
-        calcMomentumLinkCoef(coef_dev, uf_dev, vf_dev, wf_dev);
+        calcMomLinkCoef(uCoef_dev, uf_dev, vf_dev, wf_dev);
+        cudaMemcpy(vCoef_dev, uCoef_dev, coefSize, cudaMemcpyDeviceToDevice);
+        if (dim == 3) {
+            cudaMemcpy(wCoef_dev, uCoef_dev, coefSize, cudaMemcpyDeviceToDevice);
+        }
     }
 
     cudaFree(u_dev);
@@ -79,7 +104,15 @@ void Solver::solve() {
     cudaFree(vf_dev);
     cudaFree(wf_dev);
 
-    cudaFree(coef_dev);
+    cudaFree(uCoef_dev);
+    cudaFree(vCoef_dev);
+    cudaFree(wCoef_dev);
+    cudaFree(pCoef_dev);
+
+    cudaFree(uSrcTerm_dev);
+    cudaFree(vSrcTerm_dev);
+    cudaFree(wSrcTerm_dev);
+    cudaFree(pSrcTerm_dev);
 }
 
 /* void Solver::pointJacobiSolver() {
@@ -172,82 +205,82 @@ void Solver::writeVTK(const string &filename) const {
                     id = i * 8 + j * nx * 8 + k * nx * ny * 8;
                 }
 
-                _coef[id+id_aE] += aE;
-                _coef[id+id_aW] += aW;
-                _coef[id+id_aN] += aN;
-                _coef[id+id_aS] += aS;
-                _coef[id+id_aC] += -(aE + aW + aN + aS);
+                _coef[id+aE] += aE;
+                _coef[id+aW] += aW;
+                _coef[id+aN] += aN;
+                _coef[id+aS] += aS;
+                _coef[id+aC] += -(aE + aW + aN + aS);
                 if (dim == 3) {
-                    _coef[id+id_aT] += aT;
-                    _coef[id+id_aB] += aB;
-                    _coef[id+id_aC] += -(aT + aB);
+                    _coef[id+aT] += aT;
+                    _coef[id+aB] += aB;
+                    _coef[id+aC] += -(aT + aB);
                 }
 
                 // set boundary conditios
                 if (i == nx - 1) { // east
                     if (TempBCs::type[east] == 0) { // "Dirichlet" type
-                        _coef[id+id_aC] += -aE;
+                        _coef[id+aC] += -aE;
                         _coef[id+id_b] += -2 * aE * TempBCs::val[east];
-                        _coef[id+id_aE] = 0.0;
+                        _coef[id+aE] = 0.0;
                     } else if (TempBCs::type[east] == 1) { // "Neumann" type
-                        _coef[id+id_aC] += aE;
+                        _coef[id+aC] += aE;
                         _coef[id+id_b] += -TempBCs::val[east] * areaE;
-                        _coef[id+id_aE] = 0.0;
+                        _coef[id+aE] = 0.0;
                     }
                 }
                 if (i == 0) { // west
                     if (TempBCs::type[west] == 0) { // "Dirichlet" type
-                        _coef[id+id_aC] += -aW;
+                        _coef[id+aC] += -aW;
                         _coef[id+id_b] += -2 * aW * TempBCs::val[west];
-                        _coef[id+id_aW] = 0.0;
+                        _coef[id+aW] = 0.0;
                     } else if (TempBCs::type[west] == 1) { // "Neumann" type
-                        _coef[id+id_aC] += aW;
+                        _coef[id+aC] += aW;
                         _coef[id+id_b] += -TempBCs::val[west] * areaW;
-                        _coef[id+id_aW] = 0.0;
+                        _coef[id+aW] = 0.0;
                     }
                 }
                 if (j == ny - 1) { // north
                     if (TempBCs::type[north] == 0) { // "Dirichlet" type
-                        _coef[id+id_aC] += -aN;
+                        _coef[id+aC] += -aN;
                         _coef[id+id_b] += -2 * aN * TempBCs::val[north];
-                        _coef[id+id_aN] = 0.0;
+                        _coef[id+aN] = 0.0;
                     } else if (TempBCs::type[north] == 1) { // "Neumann" type
-                        _coef[id+id_aC] += aN;
+                        _coef[id+aC] += aN;
                         _coef[id+id_b] += -TempBCs::val[north] * areaN;
-                        _coef[id+id_aN] = 0.0;
+                        _coef[id+aN] = 0.0;
                     }
                 }
                 if (j == 0) { // south
                     if (TempBCs::type[south] == 0) { // "Dirichlet" type
-                        _coef[id+id_aC] += -aS;
+                        _coef[id+aC] += -aS;
                         _coef[id+id_b] += -2 * aS * TempBCs::val[south];
-                        _coef[id+id_aS] = 0.0;
+                        _coef[id+aS] = 0.0;
                     } else if (TempBCs::type[south] == 1) { // "Neumann" type
-                        _coef[id+id_aC] += aS;
+                        _coef[id+aC] += aS;
                         _coef[id+id_b] += -TempBCs::val[south] * areaS;
-                        _coef[id+id_aS] = 0.0;
+                        _coef[id+aS] = 0.0;
                     }
                 }
                 if (dim == 3 && k == nz - 1) { // top
                     if (TempBCs::type[top] == 0) { // "Dirichlet" type
-                        _coef[id+id_aC] += -aT;
+                        _coef[id+aC] += -aT;
                         _coef[id+id_b] += -2 * aT * TempBCs::val[top];
-                        _coef[id+id_aT] = 0.0;
+                        _coef[id+aT] = 0.0;
                     } else if (TempBCs::type[top] == 1) { // "Neumann" type
-                        _coef[id+id_aC] += aT;
+                        _coef[id+aC] += aT;
                         _coef[id+id_b] += -TempBCs::val[top] * areaT;
-                        _coef[id+id_aT] = 0.0;
+                        _coef[id+aT] = 0.0;
                     }
                 }
                 if (dim == 3 && k == 0) { // bottom
                     if (TempBCs::type[bottom] == 0) { // "Dirichlet" type
-                        _coef[id+id_aC] += -aB;
+                        _coef[id+aC] += -aB;
                         _coef[id+id_b] += -2 * aB * TempBCs::val[bottom];
-                        _coef[id+id_aB] = 0.0;
+                        _coef[id+aB] = 0.0;
                     } else if (TempBCs::type[bottom] == 1) { // "Neumann" type
-                        _coef[id+id_aC] += aB;
+                        _coef[id+aC] += aB;
                         _coef[id+id_b] += -TempBCs::val[bottom] * areaB;
-                        _coef[id+id_aB] = 0.0;
+                        _coef[id+aB] = 0.0;
                     }
                 }
             }

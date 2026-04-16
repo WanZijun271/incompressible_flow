@@ -13,8 +13,8 @@ __global__ void initUfKernel(scalar *u, scalar *uf) {
     int k = blockIdx.z * blockDim.z + threadIdx.z;
 
     if (i < nx && j < ny && k < nz) {
-        int id_c = i + (nx+1) * (j + ny * k);
-        int id_W = i-1 + nx * (j + ny * k);
+        int id_c  = i + (nx+1) * (j + ny * k);
+        int id_W = (i-1) + nx * (j + ny * k);
         int id_E = i + nx * (j + ny * k);
         uf[id_c] = (u[id_W] + u[id_E]) / 2;
     }
@@ -27,9 +27,9 @@ __global__ void initVfKernel(scalar *v, scalar *vf) {
     int k = blockIdx.z * blockDim.z + threadIdx.z;
 
     if (i < nx && j < ny && k < nz) {
-        int id_c = j + (ny+1) * (k + nz * i);
-        int id_S = j-1 + ny * (k + nz * i);
-        int id_N = j + ny * (k + nz * i);
+        int id_c = i + nx * (j + (ny+1) * k);
+        int id_S = i + nx * (j-1 + ny * k);
+        int id_N = i + nx * (j + ny * k);
         vf[id_c] = (v[id_S] + v[id_N]) / 2;
     }
 }
@@ -41,9 +41,9 @@ __global__ void initWfKernel(scalar *w, scalar *wf) {
     int k = blockIdx.z * blockDim.z + threadIdx.z + 1;
 
     if (i < nx && j < ny && k < nz) {
-        int id_c = k + (nz+1) * (i + nx * j);
-        int id_B = k-1 + nz * (i + nx * j);
-        int id_T = k + nz * (i + nx * j);
+        int id_c = i + nx * (j + ny * k);
+        int id_B = i + nx * (j + ny * (k-1));
+        int id_T = i + nx * (j + ny * k);
         wf[id_c] = (w[id_B] + w[id_T]) / 2;
     }
 }
@@ -116,16 +116,16 @@ __global__ void applyVfBCsKernel(scalar *vf, scalar *v, int j, int type, scalar 
     int k = blockIdx.z * blockDim.z + threadIdx.z;
 
     if (i < nx && k < nz) {
-        int id = j + (ny+1) * (k + nz * i);
+        int id = i + nx * (j + (ny+1) * k);
         if (type == 0) { // "wall"
             vf[id] = 0;
         } else if (type == 1) { // "inlet"
             vf[id] = val;
         } else if (type == 2) { // "outlet"
             if (j == 0) {
-                vf[id] = v[0 + ny * (k + nz * i)];
+                vf[id] = v[i + nx * (0 + ny * k)];
             } else if (j == ny) {
-                vf[id] = v[ny-1 + ny * (k + nz * i)];
+                vf[id] = v[i + nx * (ny-1 + ny * k)];
             }
         }
     }
@@ -137,16 +137,16 @@ __global__ void applyWfBCsKernel(scalar *wf, scalar *w, int k, int type, scalar 
     int j = blockIdx.y * blockDim.y + threadIdx.y;
 
     if (i < nx && j < ny) {
-        int id = k + (nz+1) * (i + nx * j);
+        int id = i + nx * (j + ny * k);
         if (type == 0) { // "wall"
             wf[id] = 0;
         } else if (type == 1) { // "inlet"
             wf[id] = val;
         } else if (type == 2) { // "outlet"
             if (k == 0) {
-                wf[id] = w[0 + nz * (i + nx * j)];
+                wf[id] = w[i + nx * (j + ny * 0)];
             } else if (k == nz) {
-                wf[id] = w[nz-1 + nz * (i + nx * j)];
+                wf[id] = w[i + nx * (j + ny * (nz-1))];
             }
         }
     }
@@ -202,39 +202,45 @@ void applyFaceVelBCs(scalar *uf_dev, scalar *vf_dev, scalar *wf_dev, scalar *u_d
     }
 }
 
-__global__ void calcMomentumLinkCoefKernel(scalar *coef, scalar *uf, scalar *vf, scalar *wf) {
+__global__ void calcMomLinkCoefKernel(scalar *coef, scalar *uf, scalar *vf, scalar *wf) {
 
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
     int k = blockIdx.z * blockDim.z + threadIdx.z;
 
     if (i < nx && j < ny && k < nz) {
-        int nTerms = 2 + 2 * dim;
-        int id = nTerms * (i + nx * (j + ny * k));
+        scalar ue = uf[i+1 + (nx+1) * (j   + ny     * k)];
+        scalar uw = uf[i   + (nx+1) * (j   + ny     * k)];
+        scalar vn = vf[i   + nx     * (j+1 + (ny+1) * k)];
+        scalar vs = vf[i   + nx     * (j   + (ny+1) * k)];
 
-        scalar ue = uf[i+1 + (nx+1) * (j + ny * k)];
-        scalar uw = uf[i + (nx+1) * (j + ny * k)];
-        scalar vn = vf[j+1 + (ny+1) * (k + nz * i)];
-        scalar vs = vf[j + (ny+1) * (k + nz * i)];
+        int id_aE = i + nx * (j + ny * (k + aE));
+        int id_aW = i + nx * (j + ny * (k + aW));
+        int id_aN = i + nx * (j + ny * (k + aN));
+        int id_aS = i + nx * (j + ny * (k + aS));
+        int id_aC = i + nx * (j + ny * (k + aC));
 
-        coef[id+id_aE] = (density * (ue - abs(ue)) * areaE) / 2 - dynamicViscosity * areaE / dx;
-        coef[id+id_aW] = (density * (-uw - abs(uw)) * areaW) / 2 - dynamicViscosity * areaW / dx;
-        coef[id+id_aN] = (density * (vn - abs(vn)) * areaN) / 2 - dynamicViscosity * areaN / dy;
-        coef[id+id_aS] = (density * (-vs - abs(vs)) * areaS) / 2 - dynamicViscosity * areaS / dy;
-        coef[id+id_aC] = -(coef[id+id_aE] + coef[id+id_aW] + coef[id+id_aN] + coef[id+id_aS]);
+        coef[id_aE] = (density * (ue  - abs(ue)) * areaE) / 2 - dynamicViscosity * areaE / dx;
+        coef[id_aW] = (density * (-uw - abs(uw)) * areaW) / 2 - dynamicViscosity * areaW / dx;
+        coef[id_aN] = (density * (vn  - abs(vn)) * areaN) / 2 - dynamicViscosity * areaN / dy;
+        coef[id_aS] = (density * (-vs - abs(vs)) * areaS) / 2 - dynamicViscosity * areaS / dy;
+        coef[id_aC] = -(coef[id_aE] + coef[id_aW] + coef[id_aN] + coef[id_aS]);
 
         if (dim == 3) {
             scalar wt = wf[k+1 + (nz+1) * (i + nx * j)];
-            scalar wb = wf[k + (nz+1) * (i + nx * j)];
+            scalar wb = wf[k   + (nz+1) * (i + nx * j)];
 
-            coef[id+id_aT] = (density * (wt - abs(wt)) * areaT) / 2 - dynamicViscosity * areaT / dz;
-            coef[id+id_aB] = (density * (-wb - abs(wb)) * areaB) / 2 - dynamicViscosity * areaB / dz;
-            coef[id+id_aC] += -(coef[id+id_aT] + coef[id+id_aB]);
+            int id_aT = i + nx * (j + ny * (k + aT));
+            int id_aB = i + nx * (j + ny * (k + aB));
+
+            coef[id_aT] = (density * (wt  - abs(wt)) * areaT) / 2 - dynamicViscosity * areaT / dz;
+            coef[id_aB] = (density * (-wb - abs(wb)) * areaB) / 2 - dynamicViscosity * areaB / dz;
+            coef[id_aC] += -(coef[id_aT] + coef[id_aB]);
         }
     }
 }
 
-void calcMomentumLinkCoef(scalar *coef_dev, scalar *uf_dev, scalar *vf_dev, scalar *wf_dev) {
+void calcMomLinkCoef(scalar *coef_dev, scalar *uf_dev, scalar *vf_dev, scalar *wf_dev) {
 
     dim3 threadsPerBlock;
     dim3 numBlocks; 
@@ -248,11 +254,61 @@ void calcMomentumLinkCoef(scalar *coef_dev, scalar *uf_dev, scalar *vf_dev, scal
     numBlocks.y = (ny + threadsPerBlock.y - 1) / threadsPerBlock.y;
     numBlocks.z = (nz + threadsPerBlock.z - 1) / threadsPerBlock.z;
 
-    calcMomentumLinkCoefKernel<<<numBlocks, threadsPerBlock>>>(coef_dev, uf_dev, vf_dev, wf_dev);
+    calcMomLinkCoefKernel<<<numBlocks, threadsPerBlock>>>(coef_dev, uf_dev, vf_dev, wf_dev);
 
     cudaDeviceSynchronize();
 }
 
+__global__ void calcMomXSrcTermKernel(scalar *uSrcTerm, scalar *p, int typeW, int typeE) {
+
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    int k = blockIdx.z * blockDim.z + threadIdx.z;
+
+    if (i < nx && j < ny && k < nz) {
+        int id_C = i   + nx * (j + ny * k);
+        int id_W = i-1 + nx * (j + ny * k);
+        int id_E = i+1 + nx * (j + ny * k);
+
+        if (i == 0) {
+            if (typeW == 0 || typeW == 1) { // "wall" or "inlet"
+                uSrcTerm[id_C] = 0.5 * (p[id_C] * areaW - p[id_E] * areaE);
+            } else if (typeW == 2) {
+                uSrcTerm[id_C] = 0.5 * (p[id_C] + p[id_E]) * areaE;
+            }
+            
+        } else if (i = nx - 1) {
+            if (typeE == 0 || typeE == 1) { // "wall" or "inlet"
+                uSrcTerm[id_C] = 0.5 * (p[id_W] * areaW - p[id_C] * areaE);
+            } else if (typeE == 2) {
+                uSrcTerm[id_C] = 0.5 * (p[id_W] + p[id_C]) * areaW;
+            }
+        } else {
+            uSrcTerm[id_C] = 0.5 * (p[id_W] * areaW - p[id_E] * areaE);
+        }
+    }
+}
+
+void calcMomSrcTerm(scalar *uSrcTerm_dev, scalar *vSrcTerm_dev, scalar *wSrcTerm_dev, scalar *p_dev) {
+
+    dim3 threadsPerBlock;
+    dim3 numBlocks; 
+
+    if (dim == 2) {
+        threadsPerBlock = dim3(32, 32, 1);
+    } else if (dim == 3) {
+        threadsPerBlock = dim3(16, 8, 8);
+    }
+    numBlocks.x = (nx + threadsPerBlock.x - 1) / threadsPerBlock.x;
+    numBlocks.y = (ny + threadsPerBlock.y - 1) / threadsPerBlock.y;
+    numBlocks.z = (nz + threadsPerBlock.z - 1) / threadsPerBlock.z;
+
+    calcMomXSrcTermKernel<<<numBlocks, threadsPerBlock>>>(uSrcTerm_dev, p_dev, velBCs::type[west], velBCs::type[east]);
+
+    cudaDeviceSynchronize();
+}
+
+/* 
 __global__ void pointJacobiIterateKernel(scalar *tempField, scalar* tempField0, scalar *coef, scalar *norm) {
 
     extern __shared__ scalar sharedNorm[];
@@ -306,21 +362,21 @@ __global__ void pointJacobiIterateKernel(scalar *tempField, scalar* tempField0, 
         if (dim == 2) {
             int id = i * 6 + j * nx * 6;
             newTemp = coef[id+id_b]
-                - coef[id+id_aE] * tempE
-                - coef[id+id_aW] * tempW
-                - coef[id+id_aN] * tempN
-                - coef[id+id_aS] * tempS;
-            newTemp /= coef[id+id_aC];
+                - coef[id+aE] * tempE
+                - coef[id+aW] * tempW
+                - coef[id+aN] * tempN
+                - coef[id+aS] * tempS;
+            newTemp /= coef[id+aC];
         } else if (dim == 3) {
             int id = i * 8 + j * nx * 8 + k * nx * ny * 8;
             newTemp = coef[id+id_b]
-                - coef[id+id_aE] * tempE
-                - coef[id+id_aW] * tempW
-                - coef[id+id_aN] * tempN
-                - coef[id+id_aS] * tempS
-                - coef[id+id_aT] * tempT
-                - coef[id+id_aB] * tempB;
-            newTemp /= coef[id+id_aC];
+                - coef[id+aE] * tempE
+                - coef[id+aW] * tempW
+                - coef[id+aN] * tempN
+                - coef[id+aS] * tempS
+                - coef[id+aT] * tempT
+                - coef[id+aB] * tempB;
+            newTemp /= coef[id+aC];
         }
 
         scalar dT = relax * (newTemp - tempP);
@@ -463,21 +519,21 @@ __global__ void GaussSeidelIterateKernel(scalar *tempField, scalar *coef, scalar
         if (dim == 2) {
             int id = i * 6 + j * nx * 6;
             newTemp = coef[id+id_b]
-                - coef[id+id_aE] * tempE
-                - coef[id+id_aW] * tempW
-                - coef[id+id_aN] * tempN
-                - coef[id+id_aS] * tempS;
-            newTemp /= coef[id+id_aC];
+                - coef[id+aE] * tempE
+                - coef[id+aW] * tempW
+                - coef[id+aN] * tempN
+                - coef[id+aS] * tempS;
+            newTemp /= coef[id+aC];
         } else if (dim == 3) {
             int id = i * 8 + j * nx * 8 + k * nx * ny * 8;
             newTemp = coef[id+id_b]
-                - coef[id+id_aE] * tempE
-                - coef[id+id_aW] * tempW
-                - coef[id+id_aN] * tempN
-                - coef[id+id_aS] * tempS
-                - coef[id+id_aT] * tempT
-                - coef[id+id_aB] * tempB;
-            newTemp /= coef[id+id_aC];
+                - coef[id+aE] * tempE
+                - coef[id+aW] * tempW
+                - coef[id+aN] * tempN
+                - coef[id+aS] * tempS
+                - coef[id+aT] * tempT
+                - coef[id+aB] * tempB;
+            newTemp /= coef[id+aC];
         }
 
         scalar dT = relax * (newTemp - tempP);
@@ -559,3 +615,5 @@ void GaussSeidelIterate(vector<scalar> &tempField, const vector<scalar> &coef) {
     cudaFree(devCoef);
     cudaFree(devNorm);
 }
+
+ */
