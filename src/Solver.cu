@@ -28,31 +28,45 @@ void Solver::solve() {
 
     size_t fieldSize = nx * ny * nz * sizeof(scalar);
 
-    scalar *u_dev, *v_dev, *w_dev, *p_dev, *temp_dev;
+    scalar *u_dev, *v_dev, *w_dev, *p_dev, *temp_dev, *uCorr_dev, *vCorr_dev, *wCorr_dev, *pCorr_dev;
     cudaMalloc(&u_dev, fieldSize);
     cudaMalloc(&v_dev, fieldSize);
     cudaMalloc(&w_dev, fieldSize);
     cudaMalloc(&p_dev, fieldSize);
     cudaMalloc(&temp_dev, fieldSize);
+    cudaMalloc(&uCorr_dev, fieldSize);
+    cudaMalloc(&vCorr_dev, fieldSize);
+    cudaMalloc(&wCorr_dev, fieldSize);
+    cudaMalloc(&pCorr_dev, fieldSize);
 
     cudaMemcpy(u_dev, _u.data(), fieldSize, cudaMemcpyHostToDevice);
     cudaMemcpy(v_dev, _v.data(), fieldSize, cudaMemcpyHostToDevice);
     cudaMemcpy(w_dev, _w.data(), fieldSize, cudaMemcpyHostToDevice);
     cudaMemcpy(p_dev, _p.data(), fieldSize, cudaMemcpyHostToDevice);
     cudaMemcpy(temp_dev, _temp.data(), fieldSize, cudaMemcpyHostToDevice);
+    cudaMemset(uCorr_dev, 0.0, fieldSize);
+    cudaMemset(vCorr_dev, 0.0, fieldSize);
+    cudaMemset(wCorr_dev, 0.0, fieldSize);
+    cudaMemset(pCorr_dev, 0.0, fieldSize);
 
     size_t ufSize = (nx+1) * ny * nz * sizeof(scalar);
     size_t vfSize = nx * (ny+1) * nz * sizeof(scalar);
     size_t wfSize = nx * ny * (nz+1) * sizeof(scalar);
 
-    scalar *uf_dev, *vf_dev, *wf_dev;
+    scalar *uf_dev, *vf_dev, *wf_dev, *ufCorr_dev, *vfCorr_dev, *wfCorr_dev;
     cudaMalloc(&uf_dev, ufSize);
     cudaMalloc(&vf_dev, vfSize);
     cudaMalloc(&wf_dev, wfSize);
+    cudaMalloc(&ufCorr_dev, ufSize);
+    cudaMalloc(&vfCorr_dev, vfSize);
+    cudaMalloc(&wfCorr_dev, wfSize);
 
     cudaMemset(uf_dev, 0.0, ufSize);
     cudaMemset(vf_dev, 0.0, vfSize);
     cudaMemset(wf_dev, 0.0, wfSize);
+    cudaMemset(ufCorr_dev, 0.0, ufSize);
+    cudaMemset(vfCorr_dev, 0.0, vfSize);
+    cudaMemset(wfCorr_dev, 0.0, wfSize);
 
     size_t coefSize = nx * ny * nz * (1+2*dim) * sizeof(scalar);
 
@@ -118,10 +132,17 @@ void Solver::solve() {
     cudaFree(w_dev);
     cudaFree(p_dev);
     cudaFree(temp_dev);
+    cudaFree(uCorr_dev);
+    cudaFree(vCorr_dev);
+    cudaFree(wCorr_dev);
+    cudaFree(pCorr_dev);
 
     cudaFree(uf_dev);
     cudaFree(vf_dev);
     cudaFree(wf_dev);
+    cudaFree(ufCorr_dev);
+    cudaFree(vfCorr_dev);
+    cudaFree(wfCorr_dev);
 
     cudaFree(uCoef_dev);
     cudaFree(vCoef_dev);

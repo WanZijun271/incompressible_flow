@@ -62,8 +62,8 @@ struct TempBCs{
     };
 };
 
-constexpr int numOuterIter = 100;      // iteration times 迭代次数
-constexpr int numInnerIter = 10;
+constexpr int numOuterIter = 1000;      // iteration times 迭代次数
+constexpr int numInnerIter = 100;
 constexpr scalar relax = 0.75;     // 松弛因子
 constexpr scalar tol = 1e-6;       // tolerance of relative residual
 
