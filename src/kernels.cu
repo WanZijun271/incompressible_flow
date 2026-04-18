@@ -394,18 +394,18 @@ __global__ void applyBCsToMomEqKernel(scalar *uCoef, scalar *vCoef, scalar *wCoe
         if (type == 0 || type == 1) { // "wall" or "inlet"
             uCoef[id_aC] -= 2 * uCoef[id_aOut];
             uCoef[id_aIn] += uCoef[id_aOut] / 3;
-            uSrcTerm[id_b] -= 8/3 * uCoef[id_aOut] * uBC;
+            uSrcTerm[id_b] -= (scalar)8/3 * uCoef[id_aOut] * uBC;
             uCoef[id_aOut] = 0;
 
             vCoef[id_aC] -= 2 * vCoef[id_aOut];
             vCoef[id_aIn] += vCoef[id_aOut] / 3;
-            vSrcTerm[id_b] -= 8/3 * vCoef[id_aOut] * vBC;
+            vSrcTerm[id_b] -= (scalar)8/3 * vCoef[id_aOut] * vBC;
             vCoef[id_aOut] = 0;
 
             if (dim == 3) {
                 wCoef[id_aC] -= 2 * wCoef[id_aOut];
                 wCoef[id_aIn] += wCoef[id_aOut] / 3;
-                wSrcTerm[id_b] -= 8/3 * wCoef[id_aOut] * wBC;
+                wSrcTerm[id_b] -= (scalar)8/3 * wCoef[id_aOut] * wBC;
                 wCoef[id_aOut] = 0;
             }
         } else if (type == 2) { // "outlet"

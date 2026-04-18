@@ -5,8 +5,8 @@
 
 constexpr int dim = 2;
 
-constexpr int nx = 64;
-constexpr int ny = 32;
+constexpr int nx = 256;
+constexpr int ny = 128;
 constexpr int nz = 1;
 
 constexpr scalar xmin = -0.0625;
@@ -62,11 +62,11 @@ struct TempBCs{
     };
 };
 
-constexpr int numOuterIter = 800;      // iteration times 迭代次数
+constexpr int numOuterIter = 10000;      // iteration times 迭代次数
 
-constexpr int nIter_u = 5;
-constexpr int nIter_v = 5;
-constexpr int nIter_w = 5;
+constexpr int nIter_u = 10;
+constexpr int nIter_v = 10;
+constexpr int nIter_w = 10;
 constexpr int nIter_p = 200;
 
 constexpr scalar relax_u = 0.75;     // 松弛因子

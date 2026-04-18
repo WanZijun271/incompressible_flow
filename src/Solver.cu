@@ -88,8 +88,6 @@ void Solver::solve() {
     cudaMalloc(&wfNorm_dev, sizeof(scalar));
     cudaMalloc(&pNorm_dev, sizeof(scalar));
 
-    scalar maxPNorm = -1e20, maxUNorm = -1e20, maxVNorm = -1e20, maxWNorm = -1e20, maxUfNorm = -1e20, maxVfNorm = -1e20, maxWfNorm = -1e20;
-
     for (int it = 0; it < numOuterIter; ++it) {
 
         if (it == 0) {
@@ -119,6 +117,8 @@ void Solver::solve() {
         calcPresCorrLinkCoef(pCorrCoef_dev, uCoef_dev, vCoef_dev, wCoef_dev);
 
         calcPresCorrSrcTerm(pCorrSrcTerm_dev, uf_dev, vf_dev, wf_dev);
+
+        cudaMemset(pCorr_dev, 0, fieldSize);
 
         pointJacobiIterate(pCorr_dev, fieldSize, pCorrCoef_dev, pCorrSrcTerm_dev, nIter_p, relax_p, tol_p);
 
@@ -151,37 +151,17 @@ void Solver::solve() {
         }
 
         pNorm = sqrt(pNorm / (nx * ny * nz));
-        maxPNorm = max(pNorm, maxPNorm);
         uNorm = sqrt(uNorm / (nx * ny * nz));
-        maxUNorm = max(uNorm, maxUNorm);
         vNorm = sqrt(vNorm / (nx * ny * nz));
-        maxVNorm = max(vNorm, maxVNorm);
         ufNorm = sqrt(ufNorm / ((nx+1) * ny * nz));
-        maxUfNorm = max(ufNorm, maxUfNorm);
         vfNorm = sqrt(vfNorm / (nx * (ny+1) * nz));
-        maxVfNorm = max(vfNorm, maxVfNorm);
         if (dim == 3) {
             wNorm = sqrt(wNorm / (nx * ny * nz));
-            maxWNorm = max(wNorm, maxWNorm);
             wfNorm = sqrt(wfNorm / (nx * ny * (nz+1)));
-            maxWfNorm = max(wfNorm, maxWfNorm);
         }
 
-        scalar relPNorm = pNorm / (maxPNorm + 1e-20);
-        scalar relUNorm = uNorm / (maxUNorm + 1e-20);
-        scalar relVNorm = vNorm / (maxVNorm + 1e-20);
-        scalar relUfNorm = ufNorm / (maxUfNorm + 1e-20);
-        scalar relVfNorm = vfNorm / (maxVfNorm + 1e-20);
-        scalar relWNorm = 0, relWfNorm = 0;
-        if (dim == 3) {
-            relWNorm = wNorm / (maxWNorm + 1e-20);
-            relWfNorm = wfNorm / (maxWfNorm + 1e-20);
-        }
-
-        cout << pNorm << " , " << maxPNorm << " , " << relPNorm << endl;
-
-        if (relPNorm < outerTol && relUNorm < outerTol && relVNorm < outerTol && relWNorm < outerTol && relUfNorm < outerTol
-            && relVfNorm < outerTol && relWfNorm < outerTol) {
+        if (pNorm < outerTol && uNorm < outerTol && vNorm < outerTol && wNorm < outerTol && ufNorm < outerTol && vfNorm < outerTol
+            && wfNorm < outerTol) {
             break;
         }
     }
@@ -191,52 +171,6 @@ void Solver::solve() {
     cudaMemcpy(_w.data(), w_dev, fieldSize, cudaMemcpyDeviceToHost);
     cudaMemcpy(_p.data(), p_dev, fieldSize, cudaMemcpyDeviceToHost);
     cudaMemcpy(_temp.data(), temp_dev, fieldSize, cudaMemcpyDeviceToHost);
-
-    vector<scalar> uf((nx+1)*ny*nz, 0);
-
-    cudaMemcpy(uf.data(), uf_dev, ufSize, cudaMemcpyDeviceToHost);
-
-    for (int j = ny - 1; j >= 0; --j) {
-        for (int i = 0; i < nx+1; ++i) {
-            cout << uf[i+(nx+1)*j] << ' ';
-        }
-        cout << endl;
-    }
-
-    /* cout << "----------------------------------" << endl;
-
-    vector<scalar> uCoef(nx*ny*nz*(1+2*dim), 0);
-
-    cudaMemcpy(uCoef.data(), uCoef_dev, coefSize, cudaMemcpyDeviceToHost);
-
-    for (int j = ny - 1; j >= 0; --j) {
-        for (int i = 0; i < nx; ++i) {
-            cout << uCoef[i+nx*(j+ny*aW)] << ' ';
-        }
-        cout << endl;
-    }
-
-    cout << "----------------------------------" << endl;
-
-    vector<scalar> uSrcTerm(nx*ny*nz, 0);
-
-    cudaMemcpy(uSrcTerm.data(), uSrcTerm_dev, srcTermSize, cudaMemcpyDeviceToHost);
-
-    for (int j = ny - 1; j >= 0; --j) {
-        for (int i = 0; i < nx; ++i) {
-            cout << uSrcTerm[i+nx*j] << ' ';
-        }
-        cout << endl;
-    }
-
-    cout << "----------------------------------" << endl;
-
-    for (int j = ny - 1; j >= 0; --j) {
-        for (int i = 0; i < nx; ++i) {
-            cout << _u[i+nx*j] << ' ';
-        }
-        cout << endl;
-    } */
 
     cudaFree(u_dev);
     cudaFree(v_dev);
@@ -266,6 +200,8 @@ void Solver::solve() {
     cudaFree(vfNorm_dev);
     cudaFree(wfNorm_dev);
     cudaFree(pNorm_dev);
+
+    cudaDeviceSynchronize();
 }
 
 void Solver::writeVTK(const string &filename) const {
@@ -311,7 +247,7 @@ void Solver::writeVTK(const string &filename) const {
     int ncell = nx * ny * nz;
     file << "CELL_DATA " << ncell << endl;
 
-    file << "FIELD FieldData 1" << endl;
+    file << "FIELD FieldData 3" << endl;
 
     // write temperature data
     file << "temperature 1 " << ncell << " float" << endl;
@@ -319,6 +255,19 @@ void Solver::writeVTK(const string &filename) const {
         file << temp << " ";
     }
     file << endl;
+
+    // write velocity data
+    file << "velocity 3 " << ncell << " float" << endl;
+    for (int idx = 0; idx < ncell; ++idx) {
+        file << _u[idx] << " " << _v[idx] << " " << _w[idx] << " ";
+    }
+    file << endl;
+
+    // write pressure data
+    file << "pressure 1 " << ncell << " float" << endl;
+    for (const scalar& p : _p) {
+        file << p << " ";
+    }
 
     file.close();
 }
