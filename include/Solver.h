@@ -10,13 +10,41 @@ private:
     std::vector<scalar> _u;
     std::vector<scalar> _v;
     std::vector<scalar> _w;
-
     std::vector<scalar> _p;
+    std::vector<scalar> _temp;
 
-    std::vector<scalar> _temp;        // temperature field
+    scalar *_u_dev;
+    scalar *_v_dev;
+    scalar *_w_dev;
+    scalar *_p_dev;
+    scalar *_temp_dev;
+    scalar *_pCorr_dev;
 
+    scalar *_uf_dev;
+    scalar *_vf_dev;
+    scalar *_wf_dev;
+
+    scalar *_uCoef_dev;
+    scalar *_vCoef_dev;
+    scalar *_wCoef_dev;
+    scalar *_pCorrCoef_dev;
+
+    scalar *_uSrcTerm_dev;
+    scalar *_vSrcTerm_dev;
+    scalar *_wSrcTerm_dev;
+    scalar *_pCorrSrcTerm_dev;
+
+    scalar *_uNorm_dev;
+    scalar *_vNorm_dev;
+    scalar *_wNorm_dev;
+    scalar *_ufNorm_dev;
+    scalar *_vfNorm_dev;
+    scalar *_wfNorm_dev;
+    scalar *_pNorm_dev;
+    scalar *_massNorm_dev;
 public:
     Solver(scalar u=0.0, scalar v=0.0, scalar w=0.0, scalar p=0.0, scalar temp=273.0);
+
     ~Solver();
 
     void solve();
@@ -27,7 +55,7 @@ private:
 
     void applyBCsToFaceVel();
 
-    void calcMomLinkCoef();
+    void calcMomLinkCoef(scalar *coef_dev);
     void calcMomSrcTerm();
 
     void applyBCsToMomEq();

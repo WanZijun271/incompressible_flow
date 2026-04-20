@@ -1,8 +1,8 @@
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
 
-#include "config.h"
 #include "types.h"
+#include "config.h"
 
 constexpr int east   = 0;
 constexpr int west   = 1;
