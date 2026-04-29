@@ -64,7 +64,7 @@ sudo apt install build-essential cmake git
 ## 📥 获取代码
 
 ```bash
-git clone https://github.com/你的用户名/IncompFlow-CUDA.git
+git clone https://github.com/WanZijun271/IncompFlow-CUDA.git
 cd IncompFlow-CUDA
 ```
 
