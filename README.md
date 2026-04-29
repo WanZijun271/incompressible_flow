@@ -28,8 +28,8 @@
 
 - **NVIDIA GPU**：计算能力 6.0 及以上（如 GTX 1060, RTX 2060, Tesla P100, V100, A100 等）
 - **操作系统**：Linux（Ubuntu 18.04+ 推荐）
-- **编译器**：支持 C++17（g++ 8+ / clang 10+ / MSVC 2019+）
-- **构建工具**：CMake 3.15+
+- **编译器**：支持 C++20（g++ 9+ / clang 12+ / MSVC 2019+）
+- **构建工具**：CMake 3.20+
 - **CUDA 工具包**：11.0 或更高版本
 
 ### 安装 CUDA（以 Ubuntu 为例）
@@ -64,7 +64,7 @@ sudo apt install build-essential cmake git
 ## 📥 获取代码
 
 ```bash
-git clone https://github.com/WanZijun271/IncompFlow-CUDA.git
+git clone https://github.com/你的用户名/IncompFlow-CUDA.git
 cd IncompFlow-CUDA
 ```
 
@@ -72,22 +72,23 @@ cd IncompFlow-CUDA
 
 ## 🏗️ 编译
 
-1. **创建 build 目录并运行 CMake**（需要指定你的 GPU 计算能力，例如 RTX 2080 为 `sm_75`，A100 为 `sm_80`）
+CMake 会自动检测你的 GPU 计算能力，无需手动指定 `-DCUDA_ARCH`。
 
-   ```bash
-   mkdir build && cd build
-   cmake .. -DCUDA_ARCH=sm_75 -DCMAKE_BUILD_TYPE=Release
-   ```
+```bash
+# 配置（生成 build 目录）
+cmake -B build -DCMAKE_BUILD_TYPE=Release
 
-   > 查询 GPU 计算能力：`nvidia-smi --query-gpu=compute_cap --format=csv`，输出如 `7.5` 则对应 `sm_75`。
+# 编译
+cmake --build build -- -j$(nproc)
+```
 
-2. **编译**
+编译成功后，可执行文件 `app` 位于项目根目录下的 `bin/` 文件夹中。
 
-   ```bash
-   make -j$(nproc)
-   ```
-
-   编译成功后，可执行文件 `incompflow` 位于 `build/` 目录下。
+> 若需重新编译（例如修改 `config.h` 后），可运行：
+> ```bash
+> cmake --build build --clean-first -- -j$(nproc)
+> ```
+> 或删除 `build` 和 `bin` 目录后重新执行上述两步。
 
 ---
 
@@ -100,8 +101,7 @@ cd IncompFlow-CUDA
 ## 🚀 运行
 
 ```bash
-cd build
-./incompflow
+./bin/app
 ```
 
 ---
@@ -122,7 +122,7 @@ cd build
   title = {IncompFlow-CUDA: A GPU-Accelerated Finite Volume Solver for Steady Incompressible Flows},
   year = {2026},
   url = {https://github.com/WanZijun271/IncompFlow-CUDA},
-  note = {SIMPLE algorithm, collocated grid, CUDA parallelization}
+  note = {Implementation based on the SIMPLE algorithm, collocated grid arrangement, and CUDA parallelization}
 }
 ```
 
@@ -130,9 +130,11 @@ cd build
 
 ## 🙏 致谢
 
-- 算法设计参考：
-  - Moukalled, F., Mangani, L., & Darwish, M. (2016). *The Finite Volume Method in Computational Fluid Dynamics: An Advanced Introduction with OpenFOAM® and Matlab*.
-- CUDA 编程理念受 NVIDIA 官方文档启发。
+本求解器的数值方法主要参考了：
+
+- Moukalled, F., Mangani, L., & Darwish, M. (2016). *The Finite Volume Method in Computational Fluid Dynamics: An Advanced Introduction with OpenFOAM® and Matlab*. Springer.
+
+CUDA 编程理念受 NVIDIA 官方文档启发。
 
 ---
 
