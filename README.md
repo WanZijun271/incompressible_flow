@@ -439,7 +439,6 @@ CUDA 编程理念受 [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com
 
 - 数值算法参考了 Moukalled 等学者的经典教材
 - CUDA 实现得益于 NVIDIA 官方示例与文档
-- 感谢所有为本项目提供反馈和建议的贡献者
 
 ---
 
