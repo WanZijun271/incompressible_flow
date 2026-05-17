@@ -5,14 +5,14 @@
 
 constexpr int dim = 2;
 
-constexpr int nx = 512;
-constexpr int ny = 128;
+constexpr int nx = 1024;
+constexpr int ny = 256;
 constexpr int nz = 1;
 
-constexpr scalar xmin = -0.0625;
-constexpr scalar xmax = 0.0625;
-constexpr scalar ymin = -0.0125;
-constexpr scalar ymax = 0.0125;
+constexpr scalar xmin = -0.000125;
+constexpr scalar xmax = 0.000125;
+constexpr scalar ymin = -0.000025;
+constexpr scalar ymax = 0.000025;
 constexpr scalar zmin = 0.0;
 constexpr scalar zmax = 1.0;
 
@@ -34,7 +34,7 @@ struct velBCs{
 
     static constexpr scalar val[6][3] = {
         {0, 0, 0},    // east
-        {0.001, 0, 0},    // west
+        {1, 0, 0},    // west
         {0, 0, 0},    // north 
         {0, 0, 0},    // south
         {0, 0, 0},    // top
@@ -62,7 +62,7 @@ struct TempBCs{
     };
 };
 
-constexpr int numOuterIter = 100000;      // iteration times 迭代次数
+constexpr int numOuterIter = 20000;      // iteration times 迭代次数
 
 constexpr int nIter_u = 10;
 constexpr int nIter_v = 10;
@@ -74,10 +74,10 @@ constexpr scalar relax_v = 0.75;
 constexpr scalar relax_w = 0.75;
 constexpr scalar relax_p = 0.25;
 
-constexpr scalar tol_u = 1e-4;
-constexpr scalar tol_v = 1e-4;
-constexpr scalar tol_w = 1e-4;
-constexpr scalar tol_p = 1e-6;
-constexpr scalar tol_mass = 1e-11;
+constexpr scalar tol_u = 1e-5;
+constexpr scalar tol_v = 1e-5;
+constexpr scalar tol_w = 1e-5;
+constexpr scalar tol_p = 1e-3;
+constexpr scalar tol_mass = 1e-9;
 
 #endif
