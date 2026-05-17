@@ -5,27 +5,27 @@
 
 constexpr int dim = 2;
 
-constexpr int nx = 512;
-constexpr int ny = 512;
+constexpr int nx = 1024;
+constexpr int ny = 256;
 constexpr int nz = 1;
 
-constexpr scalar xmin = -0.000125;
-constexpr scalar xmax = 0.000125;
-constexpr scalar ymin = -0.000125;
-constexpr scalar ymax = 0.000125;
+constexpr scalar xmin = -2;
+constexpr scalar xmax = 2;
+constexpr scalar ymin = -0.5;
+constexpr scalar ymax = 0.5;
 constexpr scalar zmin = 0.0;
 constexpr scalar zmax = 1.0;
 
-constexpr scalar thermalConductivity = 0.598;                                                   // thermal conductivity 热导率
-constexpr scalar specificHeatCapacity = 4186.0;                                                   // specific heat capacity 比热容
-constexpr scalar density = 998.2;                                                                // density 密度 
-constexpr scalar dynamicViscosity = 1.002e-3;
+constexpr scalar thermalConductivity = 1;                                                   // thermal conductivity 热导率
+constexpr scalar specificHeatCapacity = 1;                                                   // specific heat capacity 比热容
+constexpr scalar density = 50;                                                                // density 密度 
+constexpr scalar dynamicViscosity = 1;
 constexpr scalar thermalDiffusivity = thermalConductivity / specificHeatCapacity / density;    // thermal diffusivity 热扩散率
 
 struct velBCs{
     static constexpr int type[6] = { // 0 for the "wall" type; 1 for the "inlet" type; 2 for the "outlet" type
-        0,    // east
-        0,    // west
+        2,    // east
+        1,    // west
         0,    // north
         0,    // south
         0,    // top
@@ -34,8 +34,8 @@ struct velBCs{
 
     static constexpr scalar val[6][3] = {
         {0, 0, 0},    // east
-        {0, 0, 0},    // west
-        {1, 0, 0},    // north 
+        {1, 0, 0},    // west
+        {0, 0, 0},    // north 
         {0, 0, 0},    // south
         {0, 0, 0},    // top
         {0, 0, 0}     // bottom
@@ -74,10 +74,10 @@ constexpr scalar relax_v = 0.75;
 constexpr scalar relax_w = 0.75;
 constexpr scalar relax_p = 0.25;
 
-constexpr scalar tol_u = 1e-4;
-constexpr scalar tol_v = 1e-4;
-constexpr scalar tol_w = 1e-4;
-constexpr scalar tol_p = 1e-2;
-constexpr scalar tol_mass = 1e-8;
+constexpr scalar tol_u = 1e-5;
+constexpr scalar tol_v = 1e-5;
+constexpr scalar tol_w = 1e-5;
+constexpr scalar tol_p = 1e-3;
+constexpr scalar tol_mass = 1e-9;
 
 #endif
